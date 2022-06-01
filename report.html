@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+      
+        .box {
+            width: 100%;
+            max-width: 800px;
+            padding: 15px 25px;
+            margin: 50px auto 0 auto;
+            border-radius: 4px;
+            background-color: rgb(133, 159, 162);
+            justify-content: center;
+        }
+
+        .box label {
+            margin-left: 10px;
+            color: #e0dcd8;
+            font-weight: bold;
+            width: 150px;
+        }
+
+        .box input {
+            margin-left: 10px;
+            height: 40px;
+            padding: 0 25px;
+            transition: all 200ms;
+        }
+
+        .button {
+            background-color: #c2fbd7;
+            border-radius: 50px;
+            border-width: 0;
+            box-shadow: rgba(25, 25, 25, .04) 0 0 1px 0, rgba(0, 0, 0, .1) 0 3px 4px 0;
+            color: rgb(133, 159, 162);
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-block;
+            font-family: Arial, sans-serif;
+            font-size: 1em;
+            height: 40px;
+            padding: 0 25px;
+            transition: all 200ms;
+            margin-left: 30px;
+        }
+
+        body {
+            width: 100%;
+            overflow-x: hidden;
+            background-color: rgb(220, 236, 238);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="box ">
+        <form id="your_form"
+            action="javascript:download(document.getElementById('fromDate').value,document.getElementById('toDate').value)">
+            <label for="say">From Date</label>
+            <input type="date" id="fromDate" name="fromDate" min='1899-01-01' max='3000-01-01'>
+            <label for="to">To Date</label>
+            <input type="date" id="toDate" name="toDate" min='1899-01-01' max='3000-01-01'>
+            <button class="button" type="submit" class="btn btn-primary">Generate Report</button>
+        </form>
+    </div>
+    <!-- Script -->
+    <script type="text/javascript">
+        var today = new Date();
+        var dd = today.getDate();
+        var mm = today.getMonth() + 1; //January is 0!
+        var yyyy = today.getFullYear();
+        if (dd < 10) {
+            dd = '0' + dd;
+        }
+
+        if (mm < 10) {
+            mm = '0' + mm;
+        }
+
+        today = yyyy + '-' + mm + '-' + dd;
+        document.getElementById("fromDate").setAttribute("value", today);
+        document.getElementById("toDate").setAttribute("value", today);
+        function download(fromDate, toDate) {
+            var postData = new FormData();
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "https://sequenceshift-webhook-app.azurewebsites.net/api/report/" + fromDate + "/" + toDate, true);
+            xhr.setRequestHeader("Authorization", authenticateUser("user", "password"));
+            xhr.responseType = 'blob';
+            xhr.onload = function (e) {
+                var blob = xhr.response;
+                this.saveOrOpenBlob(blob, fromDate, toDate);
+            }.bind(this)
+            xhr.send(postData);
+        }
+
+        function saveOrOpenBlob(blob, from, to) {
+            var fileName = 'Report-' + from + '-to-' + to + '.xls'
+            var tempEl = document.createElement("a");
+            document.body.appendChild(tempEl);
+            tempEl.style = "display: none";
+            url = window.URL.createObjectURL(blob);
+            tempEl.href = url;
+            tempEl.download = fileName;
+            tempEl.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function authenticateUser(user, password) {
+            var token = user + ":" + password;
+            var hash = btoa(token);
+            return "Basic " + hash;
+        }
+
+    </script>
+</body>
+</html>
