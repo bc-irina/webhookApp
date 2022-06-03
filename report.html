@@ -83,7 +83,7 @@
         function download(fromDate, toDate) {
             var postData = new FormData();
             var xhr = new XMLHttpRequest();
-            xhr.open("GET", "https://sequenceshift-webhook-app.azurewebsites.net/api/report/" + fromDate + "/" + toDate, true);
+            xhr.open("GET", "https://<host-name>/api/report/" + fromDate + "/" + toDate, true);
             xhr.setRequestHeader("Authorization", authenticateUser("user", "password"));
             xhr.responseType = 'blob';
             xhr.onload = function (e) {

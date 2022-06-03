@@ -1,0 +1,441 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "secretName": {
+            "defaultValue": "WebHookAuth",
+            "type": "String"
+        },
+        "secretValue": {
+            "defaultValue": "[concat('surge:', newGuid())]",
+            "type": "securestring"
+        },
+        "tenantId": {
+            "type": "string",
+            "defaultValue": "[subscription().tenantId]"
+        },
+        "userId": {
+            "type": "string",
+            "defaultValue": null
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]"
+        },
+        "baseName": {
+            "defaultValue": "surge-webhook-app",
+            "type": "string",
+            "metadata": {
+                "description": "Name use as base-template to named the resources deployed in Azure."
+            }
+        },
+        "GitHubBranch": {
+            "type": "string",
+            "defaultValue": "main",
+            "metadata": {
+                "description": "Name of the branch to use when deploying (Default = main)."
+            }
+        },
+        "MonitorStorageName": {
+            "type": "string",
+            "defaultValue": "dropzone",
+            "metadata": {
+                "description": "Name of the storage account where the files will be drop and unziped. (Default = dropzone)."
+            }
+        },
+        "KeyVaultSkuName": {
+            "type": "string",
+            "defaultValue": "Standard",
+            "allowedValues": [
+                "Standard"
+            ],
+            "metadata": {
+                "description": "Specifies whether the key vault is a standard vault or a premium vault."
+            }
+        },
+        "databaseAccounts_surge_webhooks_db_name": {
+            "defaultValue": "[concat('surge-webhooks-db', uniqueString(resourceGroup().id))]",
+            "type": "String"
+        },
+        "userAssignedIdentities_identity_name": {
+            "defaultValue": "surge-user-assigned-identity",
+            "type": "String"
+        },
+        "role_name": {
+            "defaultValue": "[newGuid()]",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "suffix": "[substring(toLower(uniqueString(resourceGroup().id, resourceGroup().location)),0,5)]",
+        "funcAppName": "[toLower(concat(parameters('baseName'), variables('suffix')))]",
+        "baseNameNoDash": "[replace(parameters('baseName'),'-', '')]",
+        "KeyVaultName": "[toLower(concat(variables('baseNameNoDash'), '-kv-', variables('suffix')))]",
+        "funcStorageName": "[tolower(concat(substring(variables('baseNameNoDash'), 0, min(length(variables('baseNameNoDash')),14)), 'stg', variables('suffix')))]",
+        "serverFarmName": "[concat(substring(parameters('baseName'), 0, min(length(parameters('baseName')),14)), '-srv-', variables('suffix'))]",
+        "repoURL": "https://github.com/bc-irina/webhookApp.git",
+        "managedIdentityId": "[concat('/subscriptions/', subscription().id, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities/', parameters('userAssignedIdentities_identity_name'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+            "apiVersion": "2018-11-30",
+            "name": "[parameters('userAssignedIdentities_identity_name')]",
+            "location": "[parameters('location')]"
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2015-05-01",
+            "name": "[parameters('baseName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "Request_Source": "rest"
+            }
+        },
+        {
+            "apiVersion": "2018-11-01",
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('funcAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms',variables('serverFarmName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), parameters('secretName'))]",
+                "[resourceId('Microsoft.Insights/components', parameters('baseName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('userAssignedIdentities_identity_name'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned, UserAssigned",
+                "userAssignedIdentities": {
+                    "/subscriptions/1b46299f-e391-4fac-89aa-3bbbd2ec9ce4/resourcegroups/demoResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/surge-user-assigned-identity": {}
+                }
+            },
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+                "storageAccountRequired": false,
+                "keyVaultReferenceIdentity": "SystemAssigned",
+                "siteConfig": {
+                    "cors": {
+                        "allowedOrigins": [
+                            "*"
+                        ]
+                    },
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2021-09-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2021-09-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "dotnet"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "CosmosDbConnectionString",
+                            "value": "[concat('AccountEndpoint=https://',parameters('databaseAccounts_surge_webhooks_db_name'),'.documents.azure.com:443/;AccountKey=', listKeys(parameters('databaseAccounts_surge_webhooks_db_name'),'2022-02-15-preview').primaryMasterKey)]"
+                        },
+                        {
+                            "name": "WebHookAuth",
+                            "value": "[concat('@Microsoft.KeyVault(SecretUri=',reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), parameters('secretName'))).secretUriWithVersion,')')]"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('microsoft.insights/components/',parameters('baseName')), '2015-05-01').InstrumentationKey]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('microsoft.insights/components/', parameters('baseName')), '2015-05-01').ConnectionString]"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "name": "web",
+                    "type": "sourcecontrols",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', variables('funcAppName'))]"
+                    ],
+                    "properties": {
+                        "RepoUrl": "[variables('repoURL')]",
+                        "branch": "[parameters('GitHubBranch')]",
+                        "publishRunbook": true,
+                        "IsManualIntegration": true
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-09-01",
+            "name": "[variables('funcStorageName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "displayName": "funStorageName"
+            },
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2"
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-02-01",
+            "name": "[variables('serverFarmName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('serverFarmName')]",
+                "computeMode": "Dynamic"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2016-10-01",
+            "name": "[variables('KeyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "properties": {
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [],
+                "resources": [],
+                "sku": {
+                    "name": "[parameters('KeyVaultSkuName')]",
+                    "family": "A"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "name": "[concat(variables('KeyVaultName'), '/add')]",
+            "apiVersion": "2018-02-14",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/Sites', variables('funcAppName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('funcAppName')), '2019-08-01', 'Full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "list",
+                                "get"
+                            ]
+                        }
+                    },
+                    {
+                        "tenantId": "[parameters('tenantId')]",
+                        "objectId": "[parameters('userId')]",
+                        "permissions": {
+                            "secrets": [
+                                "list",
+                                "get"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('KeyVaultName'),  '/',parameters('secretName'))]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('secretValue')]"
+            }
+        },
+        {
+            "type": "Microsoft.DocumentDB/databaseAccounts",
+            "apiVersion": "2021-11-15-preview",
+            "name": "[parameters('databaseAccounts_surge_webhooks_db_name')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "defaultExperience": "Core (SQL)",
+                "hidden-cosmos-mmspecial": ""
+            },
+            "kind": "GlobalDocumentDB",
+            "identity": {
+                "type": "None"
+            },
+            "properties": {
+                "publicNetworkAccess": "Enabled",
+                "enableAutomaticFailover": false,
+                "enableMultipleWriteLocations": false,
+                "isVirtualNetworkFilterEnabled": false,
+                "virtualNetworkRules": [],
+                "disableKeyBasedMetadataWriteAccess": false,
+                "enableFreeTier": true,
+                "enableAnalyticalStorage": false,
+                "analyticalStorageConfiguration": {
+                    "schemaType": "WellDefined"
+                },
+                "databaseAccountOfferType": "Standard",
+                "defaultIdentity": "FirstPartyIdentity",
+                "networkAclBypass": "None",
+                "disableLocalAuth": false,
+                "consistencyPolicy": {
+                    "defaultConsistencyLevel": "Session",
+                    "maxIntervalInSeconds": 5,
+                    "maxStalenessPrefix": 100
+                },
+                "locations": [
+                    {
+                        "locationName": "[parameters('location')]",
+                        "provisioningState": "Succeeded",
+                        "failoverPriority": 0,
+                        "isZoneRedundant": false
+                    }
+                ],
+                "cors": [],
+                "capabilities": [
+                    {
+                        "name": "EnableServerless"
+                    }
+                ],
+                "ipRules": [],
+                "backupPolicy": {
+                    "type": "Periodic",
+                    "periodicModeProperties": {
+                        "backupIntervalInMinutes": 240,
+                        "backupRetentionIntervalInHours": 8,
+                        "backupStorageRedundancy": "Geo"
+                    }
+                },
+                "networkAclBypassResourceIds": [],
+                "diagnosticLogSettings": {
+                    "enableFullTextQuery": "None"
+                },
+                "capacity": {
+                    "totalThroughputLimit": 4000
+                }
+            }
+        },
+        {
+            "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
+            "apiVersion": "2021-11-15-preview",
+            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/outDatabase')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+            ],
+            "properties": {
+                "resource": {
+                    "id": "outDatabase"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions",
+            "apiVersion": "2021-11-15-preview",
+            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/00000000-0000-0000-0000-000000000001')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+            ],
+            "properties": {
+                "roleName": "Cosmos DB Built-in Data Reader",
+                "type": "BuiltInRole",
+                "assignableScopes": [
+                    "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                ],
+                "permissions": [
+                    {
+                        "dataActions": [
+                            "Microsoft.DocumentDB/databaseAccounts/readMetadata",
+                            "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/executeQuery",
+                            "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/readChangeFeed",
+                            "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/read"
+                        ],
+                        "notDataActions": []
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions",
+            "apiVersion": "2021-11-15-preview",
+            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/00000000-0000-0000-0000-000000000002')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+            ],
+            "properties": {
+                "roleName": "Cosmos DB Built-in Data Contributor",
+                "type": "BuiltInRole",
+                "assignableScopes": [
+                    "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                ],
+                "permissions": [
+                    {
+                        "dataActions": [
+                            "Microsoft.DocumentDB/databaseAccounts/readMetadata",
+                            "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*",
+                            "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*"
+                        ],
+                        "notDataActions": []
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+            "apiVersion": "2021-11-15-preview",
+            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/outDatabase/WebhookCollection')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', parameters('databaseAccounts_surge_webhooks_db_name'), 'outDatabase')]",
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+            ],
+            "properties": {
+                "resource": {
+                    "id": "WebhookCollection",
+                    "indexingPolicy": {
+                        "indexingMode": "consistent",
+                        "automatic": true,
+                        "includedPaths": [
+                            {
+                                "path": "/*"
+                            }
+                        ],
+                        "excludedPaths": [
+                            {
+                                "path": "/\"_etag\"/?"
+                            }
+                        ]
+                    },
+                    "partitionKey": {
+                        "paths": [
+                            "/_partitionKey"
+                        ],
+                        "kind": "Hash",
+                        "version": 2
+                    },
+                    "conflictResolutionPolicy": {
+                        "mode": "LastWriterWins",
+                        "conflictResolutionPath": "/_ts"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
