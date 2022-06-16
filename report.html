@@ -65,6 +65,9 @@
     </div>
     <!-- Script -->
     <script type="text/javascript">
+        var HOST_NAME="https://<host-name>"
+        var USER="user"
+        var PASSWORD="password"
         var today = new Date();
         var dd = today.getDate();
         var mm = today.getMonth() + 1; //January is 0!
@@ -83,8 +86,8 @@
         function download(fromDate, toDate) {
             var postData = new FormData();
             var xhr = new XMLHttpRequest();
-            xhr.open("GET", "http://localhost:7071/api/report/" + fromDate + "/" + toDate, true);
-            xhr.setRequestHeader("Authorization", authenticateUser("user", "password"));
+            xhr.open("GET", HOST_NAME +"/api/report/"+ fromDate + "/" + toDate, true);
+            xhr.setRequestHeader("Authorization", authenticateUser(USER, PASSWORD));
             xhr.responseType = 'blob';
             xhr.onload = function (e) {
                 var blob = xhr.response;

@@ -15,15 +15,15 @@
             "defaultValue": "[subscription().tenantId]"
         },
         "userId": {
-            "type": "string",
-            "defaultValue": null
+            "type": "string"
+            
         },
         "location": {
             "type": "string",
             "defaultValue": "[resourceGroup().location]"
         },
         "baseName": {
-            "defaultValue": "name-webhook-app",
+            "defaultValue": "webhook-app",
             "type": "string",
             "metadata": {
                 "description": "Name use as base-template to named the resources deployed in Azure."
@@ -73,8 +73,7 @@
         "KeyVaultName": "[toLower(concat(variables('baseNameNoDash'), '-kv-', variables('suffix')))]",
         "funcStorageName": "[tolower(concat(substring(variables('baseNameNoDash'), 0, min(length(variables('baseNameNoDash')),14)), 'stg', variables('suffix')))]",
         "serverFarmName": "[concat(substring(parameters('baseName'), 0, min(length(parameters('baseName')),14)), '-srv-', variables('suffix'))]",
-        "repoURL": "https://github.com/bc-irina/webhookApp.git",
-        "managedIdentityId": "[concat('/subscriptions/', subscription().id, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities/', parameters('userAssignedIdentities_identity_name'))]"
+        "repoURL": "https://github.com/bc-irina/webhookApp.git"
     },
     "resources": [
         {
@@ -110,7 +109,7 @@
             "identity": {
                 "type": "SystemAssigned, UserAssigned",
                 "userAssignedIdentities": {
-                    "[variables('managedIdentityId')]": {}
+                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('userAssignedIdentities_identity_name'))]": {}
                 }
             },
             "properties": {
@@ -287,7 +286,7 @@
                 "isVirtualNetworkFilterEnabled": false,
                 "virtualNetworkRules": [],
                 "disableKeyBasedMetadataWriteAccess": false,
-                "enableFreeTier": true,
+                "enableFreeTier": false,
                 "enableAnalyticalStorage": false,
                 "analyticalStorageConfiguration": {
                     "schemaType": "WellDefined"

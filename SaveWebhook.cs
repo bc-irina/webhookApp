@@ -1,4 +1,3 @@
-
 using System;
 using System.Text;
 using System.IO;
@@ -10,10 +9,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 namespace Company.Function
 {
-
     public static class SaveWebhook
     {
-
         [FunctionName("SaveWebhook")]
         public static IActionResult Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "webhook")] HttpRequest webhookReq,
@@ -35,7 +32,6 @@ namespace Company.Function
                 var config = new ConfigurationBuilder()
                           .AddEnvironmentVariables()
                           .Build();
-               // string userNameKeyVault = config["WebHookAuth"];
                 string userNameKeyVault = Environment.GetEnvironmentVariable("WebHookAuth", EnvironmentVariableTarget.Process);
                 log.LogInformation(usernamePassword);
                 if (usernamePassword != userNameKeyVault)
@@ -45,11 +41,8 @@ namespace Company.Function
                 }
 
                 string requestBody = new StreamReader(webhookReq.Body).ReadToEnd();
-
-
                 outputDocument = requestBody;
                 return (ActionResult)new OkObjectResult(requestBody);
-                //new BadRequestObjectResult("Empty request body");
             }
             else
             {

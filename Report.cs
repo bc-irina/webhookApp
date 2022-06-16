@@ -1,4 +1,3 @@
-
 using System;
 using System.Text;
 using System.IO;
@@ -10,7 +9,6 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Net.Http;
 using System.Net;
-using Syncfusion.XlsIO;
 using System.Net.Http.Headers;
 using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.Configuration;
@@ -49,9 +47,7 @@ namespace Company.Function
         cardholder_address_postcode,
         cardholder_address_country,
         metadata
-
     }
-    //curl -v -u user:password https://<app-name>.azurewebsites.net/api/test/2021-04-25/2022-05-24 --output report.xls
     public static class Report
     {
         static HttpResponseMessage response;
@@ -75,12 +71,10 @@ namespace Company.Function
                 var config = new ConfigurationBuilder()
                             .AddEnvironmentVariables()
                             .Build();
-                //string userNameKeyVault = config["WebHookAuth"];
                 string userNameKeyVault = Environment.GetEnvironmentVariable("WebHookAuth", EnvironmentVariableTarget.Process);
                 log.LogInformation(usernamePassword);
                 if (usernamePassword != userNameKeyVault)
                 {
-
                     return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                 }
 
@@ -96,8 +90,6 @@ namespace Company.Function
                     headerRow.Add(arr);
                     String upRange = (headerRow[0].Length + 64) > 90 ? "A" + Char.ConvertFromUtf32(headerRow[0].Length + 38) : Char.ConvertFromUtf32(headerRow[0].Length + 64);
                     string headerRange = "A1:" + upRange + "1";
-
-                    // var worksheet = excel.Workbook.Worksheets["Report1"];
                     worksheet.Cells[headerRange].LoadFromArrays(headerRow);
 
                     // build report content
@@ -109,16 +101,8 @@ namespace Company.Function
                         JToken responseBody = JToken.FromObject(documentItem);
                         foreach (ReportHeader a in Enum.GetValues(typeof(ReportHeader)))
                         {
-                            log.LogInformation(a.ToString());
-                            try
-                            {
-                                string cellValue = responseBody[a.ToString()] != null ? responseBody[a.ToString()].ToString() : null;
-                                worksheet.Cells[row, (int)a + 1].Value = cellValue.Replace("\n", "").Replace("\r", "");
-                            }
-                            catch (Exception e)
-                            {
-                                log.LogInformation(e.Message);
-                            }
+                            string cellValue = responseBody[a.ToString()] != null ? responseBody[a.ToString()].ToString() : null;
+                            worksheet.Cells[row, (int)a + 1].Value = cellValue.Replace("\n", "").Replace("\r", "");
                         }
                         row = row + 1;
                     }
@@ -132,13 +116,10 @@ namespace Company.Function
                     {
                         FileName = "Report-from-" + from + "-to-" + to + ".xlsx"
                     };
-                    // //Set the content type as xlsx format mime type
+                    //Set the content type as xlsx format mime type
                     response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheet.excel");
-
                 }
-
                 return response;
-
             }
             else
             {
