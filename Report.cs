@@ -14,8 +14,43 @@ using Syncfusion.XlsIO;
 using System.Net.Http.Headers;
 using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.Configuration;
+using OfficeOpenXml;
 namespace Company.Function
 {
+    public enum ReportHeader
+    {
+        user_id,
+        service,
+        response_code,
+        response_text,
+        approved,
+        transaction_reference,
+        txn_reference,
+        receipt_number,
+        transaction_type,
+        token,
+        merchant_reference,
+        crn1,
+        crn2,
+        crn3,
+        masked_card_number,
+        payment_date,
+        custom_id_name,
+        custom_id_value,
+        amount,
+        currency,
+        expiry_date,
+        cardholder_name,
+        card_type,
+        cardholder_address_street,
+        cardholder_address_street2,
+        cardholder_address_city,
+        cardholder_address_state,
+        cardholder_address_postcode,
+        cardholder_address_country,
+        metadata
+
+    }
     //curl -v -u user:password https://<app-name>.azurewebsites.net/api/test/2021-04-25/2022-05-24 --output report.xls
     public static class Report
     {
@@ -29,7 +64,6 @@ namespace Company.Function
             string to,
             ILogger log)
         {
-           
             var authHeader = req.Headers.Authorization;
             if (authHeader != null && authHeader.ToString().StartsWith("Basic"))
             {
@@ -50,88 +84,61 @@ namespace Company.Function
                     return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                 }
 
-                //Instantiate the spreadsheet creation engine
-                using (ExcelEngine excelEngine = new ExcelEngine())
+                ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+                using (ExcelPackage excel = new ExcelPackage())
                 {
-                    //Instantiate the Excel application object
-                    IApplication application = excelEngine.Excel;
+                    MemoryStream memorystream = new MemoryStream();
+                    var worksheet = excel.Workbook.Worksheets.Add("Report1");
 
-                    //Assigns default application version
-                    application.DefaultVersion = ExcelVersion.Excel2013;
+                    // build exel header
+                    var headerRow = new List<string[]>();
+                    var arr = Enum.GetNames(typeof(ReportHeader));
+                    headerRow.Add(arr);
+                    String upRange = (headerRow[0].Length + 64) > 90 ? "A" + Char.ConvertFromUtf32(headerRow[0].Length + 38) : Char.ConvertFromUtf32(headerRow[0].Length + 64);
+                    string headerRange = "A1:" + upRange + "1";
 
-                    //A new workbook is created equivalent to creating a new workbook in Excel
-                    //Create a workbook with 1 worksheet
-                    IWorkbook workbook = application.Workbooks.Create(1);
+                    // var worksheet = excel.Workbook.Worksheets["Report1"];
+                    worksheet.Cells[headerRange].LoadFromArrays(headerRow);
 
-                    //Access a worksheet from workbook
-                    IWorksheet worksheet = workbook.Worksheets[0];
-
-                    //Adding text data
-                    worksheet.Range["A1"].Text = "Transaction Date";
-                    worksheet.Range["B1"].Text = "DpsTxnRef";
-                    worksheet.Range["C1"].Text = "ReCo";
-                    worksheet.Range["D1"].Text = "ResponseText";
-                    worksheet.Range["E1"].Text = "DpsBillingId";
-
-                    int i = 2;
-                    foreach (var e in inputDocument)
+                    // build report content
+                    int row = 2;
+                    int numCol = worksheet.Dimension.Columns;
+                    foreach (var documentItem in inputDocument)
                     {
-                        //  var jsonToReturn = JsonConvert.SerializeObject(e);
-                        var json = JsonConvert.SerializeObject(e);
-                        JToken responseBody = JToken.FromObject(e);
-                        //var dictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-
-                        string date = responseBody["payment_date"].ToString().Replace("00:00:00 +0000 UTC", "");
-                        JToken metadata = responseBody["metadata"];
-                        string DpsTxnRef = null;
-                        string reCo = null;
-                        string responsetext = null;
-                        string DpsBillingId = null;
-
-
-                        if (metadata != null)
+                        var json = JsonConvert.SerializeObject(documentItem);
+                        JToken responseBody = JToken.FromObject(documentItem);
+                        foreach (ReportHeader a in Enum.GetValues(typeof(ReportHeader)))
                         {
-                            DpsTxnRef = metadata["windcave_dpstxnref"] != null ? metadata["windcave_dpstxnref"].ToString() : null;
-                            reCo = metadata["windcave_reco"] != null ? metadata["windcave_reco"].ToString() : null;
-                            responsetext = metadata["windcave_responsetext"] != null ? metadata["windcave_responsetext"].ToString() : null;
-                            DpsBillingId = metadata["windcave_transaction_dpsbillingid"] != null ? metadata["windcave_transaction_dpsbillingid"].ToString() : null;
+                            log.LogInformation(a.ToString());
+                            try
+                            {
+                                string cellValue = responseBody[a.ToString()] != null ? responseBody[a.ToString()].ToString() : null;
+                                worksheet.Cells[row, (int)a + 1].Value = cellValue.Replace("\n", "").Replace("\r", "");
+                            }
+                            catch (Exception e)
+                            {
+                                log.LogInformation(e.Message);
+                            }
                         }
-                        else
-                        {
-                            reCo = responseBody["response_code"].ToString();
-                            responsetext = responseBody["response_text"].ToString();
-
-                        }
-
-                        worksheet.Range["A" + i].Text = date;
-                        worksheet.Range["B" + i].Text = DpsTxnRef;
-                        worksheet.Range["C" + i].Text = reCo;
-                        worksheet.Range["D" + i].Text = responsetext;
-                        worksheet.Range["E" + i].Text = DpsBillingId;
-                        i++;
+                        row = row + 1;
                     }
 
-                    MemoryStream memorystream = new MemoryStream();
-
-                    //Saving the workbook to stream in XLSX format
-                    workbook.Version = ExcelVersion.Excel2013;
-                    workbook.SaveAs(memorystream);
-                    //Create the response to return
+                    excel.SaveAs(memorystream);
                     response = new HttpResponseMessage(HttpStatusCode.OK);
-
                     //Set the Excel document content response
                     response.Content = new ByteArrayContent(memorystream.ToArray());
-
                     //Set the contentDisposition as attachment
                     response.Content.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment")
                     {
                         FileName = "Report-from-" + from + "-to-" + to + ".xlsx"
                     };
-                    //Set the content type as xlsx format mime type
+                    // //Set the content type as xlsx format mime type
                     response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheet.excel");
+
                 }
 
                 return response;
+
             }
             else
             {

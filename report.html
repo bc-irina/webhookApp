@@ -83,8 +83,8 @@
         function download(fromDate, toDate) {
             var postData = new FormData();
             var xhr = new XMLHttpRequest();
-            xhr.open("GET", "https://webhookchildfund.azurewebsites.net/api/report/" + fromDate + "/" + toDate, true);
-            xhr.setRequestHeader("Authorization", authenticateUser("surge", "4963d65c-76c5-43d5-b24d-be6e0ef1e487"));
+            xhr.open("GET", "http://localhost:7071/api/report/" + fromDate + "/" + toDate, true);
+            xhr.setRequestHeader("Authorization", authenticateUser("user", "password"));
             xhr.responseType = 'blob';
             xhr.onload = function (e) {
                 var blob = xhr.response;

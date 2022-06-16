@@ -1,7 +1,8 @@
 # webhookApp
 
-## Console command to generate rport
-curl -v -u surge:4963d65c-76c5-43d5-b24d-be6e0ef1e487 https://webhookchildfund.azurewebsites.net/api/report/2020-01-01/2022-06-06 --output report.xls
+## Console command to generate a report
+curl -v -u user:password https://<host-name>/api/report/2020-01-01/2022-06-06 --output report.xlsx
 
 ## UI report gereration 
-report.html 
+update report.html file with a valid host-name and auhtorisation details (username: password)
+open report.html inn the browser 
