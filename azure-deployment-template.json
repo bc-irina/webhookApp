@@ -7,7 +7,7 @@
             "type": "String"
         },
         "secretValue": {
-            "defaultValue": "[concat('surge:', newGuid())]",
+            "defaultValue": "[concat('user:', newGuid())]",
             "type": "securestring"
         },
         "tenantId": {
@@ -23,7 +23,7 @@
             "defaultValue": "[resourceGroup().location]"
         },
         "baseName": {
-            "defaultValue": "surge-webhook-app",
+            "defaultValue": "name-webhook-app",
             "type": "string",
             "metadata": {
                 "description": "Name use as base-template to named the resources deployed in Azure."
@@ -31,9 +31,9 @@
         },
         "GitHubBranch": {
             "type": "string",
-            "defaultValue": "main",
+            "defaultValue": "webhook-app",
             "metadata": {
-                "description": "Name of the branch to use when deploying (Default = main)."
+                "description": "Name of the branch to use when deploying."
             }
         },
         "MonitorStorageName": {
@@ -53,12 +53,12 @@
                 "description": "Specifies whether the key vault is a standard vault or a premium vault."
             }
         },
-        "databaseAccounts_surge_webhooks_db_name": {
-            "defaultValue": "[concat('surge-webhooks-db', uniqueString(resourceGroup().id))]",
+        "databaseAccounts_webhooks_db_name": {
+            "defaultValue": "[concat('webhooks-db', uniqueString(resourceGroup().id))]",
             "type": "String"
         },
         "userAssignedIdentities_identity_name": {
-            "defaultValue": "surge-user-assigned-identity",
+            "defaultValue": "user-assigned-identity",
             "type": "String"
         },
         "role_name": {
@@ -110,7 +110,7 @@
             "identity": {
                 "type": "SystemAssigned, UserAssigned",
                 "userAssignedIdentities": {
-                    "/subscriptions/1b46299f-e391-4fac-89aa-3bbbd2ec9ce4/resourcegroups/demoResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/surge-user-assigned-identity": {}
+                    "[variables('managedIdentityId')]": {}
                 }
             },
             "properties": {
@@ -142,7 +142,7 @@
                         },
                         {
                             "name": "CosmosDbConnectionString",
-                            "value": "[concat('AccountEndpoint=https://',parameters('databaseAccounts_surge_webhooks_db_name'),'.documents.azure.com:443/;AccountKey=', listKeys(parameters('databaseAccounts_surge_webhooks_db_name'),'2022-02-15-preview').primaryMasterKey)]"
+                            "value": "[concat('AccountEndpoint=https://',parameters('databaseAccounts_webhooks_db_name'),'.documents.azure.com:443/;AccountKey=', listKeys(parameters('databaseAccounts_webhooks_db_name'),'2022-02-15-preview').primaryMasterKey)]"
                         },
                         {
                             "name": "WebHookAuth",
@@ -270,7 +270,7 @@
         {
             "type": "Microsoft.DocumentDB/databaseAccounts",
             "apiVersion": "2021-11-15-preview",
-            "name": "[parameters('databaseAccounts_surge_webhooks_db_name')]",
+            "name": "[parameters('databaseAccounts_webhooks_db_name')]",
             "location": "[parameters('location')]",
             "tags": {
                 "defaultExperience": "Core (SQL)",
@@ -336,9 +336,9 @@
         {
             "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
             "apiVersion": "2021-11-15-preview",
-            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/outDatabase')]",
+            "name": "[concat(parameters('databaseAccounts_webhooks_db_name'), '/outDatabase')]",
             "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_webhooks_db_name'))]"
             ],
             "properties": {
                 "resource": {
@@ -349,15 +349,15 @@
         {
             "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions",
             "apiVersion": "2021-11-15-preview",
-            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/00000000-0000-0000-0000-000000000001')]",
+            "name": "[concat(parameters('databaseAccounts_webhooks_db_name'), '/00000000-0000-0000-0000-000000000001')]",
             "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_webhooks_db_name'))]"
             ],
             "properties": {
                 "roleName": "Cosmos DB Built-in Data Reader",
                 "type": "BuiltInRole",
                 "assignableScopes": [
-                    "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                    "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_webhooks_db_name'))]"
                 ],
                 "permissions": [
                     {
@@ -375,15 +375,15 @@
         {
             "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions",
             "apiVersion": "2021-11-15-preview",
-            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/00000000-0000-0000-0000-000000000002')]",
+            "name": "[concat(parameters('databaseAccounts_webhooks_db_name'), '/00000000-0000-0000-0000-000000000002')]",
             "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_webhooks_db_name'))]"
             ],
             "properties": {
                 "roleName": "Cosmos DB Built-in Data Contributor",
                 "type": "BuiltInRole",
                 "assignableScopes": [
-                    "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                    "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_webhooks_db_name'))]"
                 ],
                 "permissions": [
                     {
@@ -400,10 +400,10 @@
         {
             "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
             "apiVersion": "2021-11-15-preview",
-            "name": "[concat(parameters('databaseAccounts_surge_webhooks_db_name'), '/outDatabase/WebhookCollection')]",
+            "name": "[concat(parameters('databaseAccounts_webhooks_db_name'), '/outDatabase/WebhookCollection')]",
             "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', parameters('databaseAccounts_surge_webhooks_db_name'), 'outDatabase')]",
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_surge_webhooks_db_name'))]"
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', parameters('databaseAccounts_webhooks_db_name'), 'outDatabase')]",
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('databaseAccounts_webhooks_db_name'))]"
             ],
             "properties": {
                 "resource": {
